@@ -2,7 +2,7 @@
 class minterm:
     def __init__(self, id, numOfVariables):
         self.id = [id]
-        self.binary = bin(self.id)[2:].zfill(numOfVariables)
+        self.binary = bin(id)[2:].zfill(numOfVariables)
         self.group = self.binary.count('1')
         self.flag = False
 
@@ -13,8 +13,9 @@ class minterm:
 # ========================================== FUNCTIONS ========================================== #
 
 def vars_generator(numOfVariables):
+    vars = []
     for i in range(numOfVariables):
-        vars.append(chr(ord('a') + i)) #chr betconvert el unicode integer into a character
+        vars.append(chr(ord('A') + i)) #chr betconvert el unicode integer into a character
     return vars
 
 def combine_terms(mintermsList):
@@ -69,7 +70,7 @@ def combine_terms(mintermsList):
     return combinedTerms
 
 def find_PIs_and_EPIs(mintermList):
-    allPIs = []
+    PIs = []
     currentTerms = mintermList
 
     while True:
@@ -78,12 +79,12 @@ def find_PIs_and_EPIs(mintermList):
         for term in currentTerms:
             if not term.flag:
                 already_included = False
-                for existing in allPIs:
+                for existing in PIs:
                     if term.id == existing.id and term.binary == existing.binary:
                         already_included = True
                         break
                 if not already_included:
-                    allPIs.append(term)
+                    PIs.append(term)
 
         if not combined:
             break
@@ -92,34 +93,62 @@ def find_PIs_and_EPIs(mintermList):
 
     minterm_to_implicants = {} #key -> minterm id from original mintermsList, values -> id of prime implicants that contain that minterm
     for minterm in mintermList:
-        for pi in allPIs:
+        for pi in PIs:
             if minterm.id[0] in pi.id:
-                if minterm.id[0] not in minterm_to_implicants:
-                    minterm_to_implicants[minterm.id[0]] = []
+                minterm_to_implicants[minterm.id[0]] = minterm_to_implicants.get(minterm.id[0], [])
                 minterm_to_implicants[minterm.id[0]].append(pi)
 
-    epis = []
+    EPIs = []
     for minterm_id, implicants in minterm_to_implicants.items():
         if len(implicants) == 1:
             epi = implicants[0]
-            if epi not in epis:
-                epis.append(epi)
-
-    return allPIs, epis
+            if epi not in EPIs:
+                EPIs.append(epi)
 
 
-        
+    equation = []
+    for epi in EPIs:
+        if epi not in equation:
+            equation.append(epi)
 
-# ========================================== MAIN FUNCTION ========================================== #
+    minterm_to_implicants_copy = {k: v[:] for k, v in minterm_to_implicants.items()}
 
-def main():
-    print("Hello, World! This is the main function.")
+    for covered in epi.id:
+        if covered in minterm_to_implicants_copy:
+            del minterm_to_implicants_copy[covered]
 
-if __name__ == "__main__":
-    main()
+    while minterm_to_implicants_copy:
+        pi_coverage = {} # key-> PI, value-> set of minterm ids
+        for minterm_id, implicants in minterm_to_implicants_copy.items():
+            for pi in implicants:
+                pi_coverage[pi] = pi_coverage.get(pi, set())
+                pi_coverage[pi].add(minterm_id)
+    
+        best_pi = max(pi_coverage, key=lambda pi: len(pi_coverage[pi]))
+        if best_pi not in equation:
+            equation.append(best_pi)
+
+        for covered in best_pi.id:
+            if covered in minterm_to_implicants_copy:
+                del minterm_to_implicants_copy[covered]
+
+    return PIs, EPIs, equation
+
+def convert_to_variables(implicants, varNames):
+    result = []
+    for imp in implicants:
+        term = ''
+        for idx, val in enumerate(imp.binary):
+            if val == '1':
+                term += varNames[idx]
+            elif val == '0':
+                term += varNames[idx] + "'"
+            
+        result.append(term if term else '1')
+    return result
 
 # ========================================== EXTRA FUNCTIONS ========================================== #
-def variables_to_minterms(terms, vars): #convert fubction in terms of a & a' to a list that's the sum of minterms
+def SOP_to_minterms(terms, vars): #convert fubction in terms of a & a' to a list that's the sum of minterms
     all_minterms = []
 
     for term in terms: #loop over all terms 
@@ -176,3 +205,241 @@ def maxterms_to_minterms(maxterms, numOfVariables):
     return minterms
 
 # ========================================== UTILITY FUNCTIONS ========================================== #
+def colorprint(text, color=None, *args):
+    """
+    Prints colored text to the terminal. Color options: 'G', 'Y', 'R', 'O', 'B', 'T', 'r'.
+    """
+    color_codes = {
+        'G': '\033[32m',  # Green
+        'Y': '\033[33m',  # Yellow
+        'R': '\033[31m',  # Red
+        'O': '\033[38;2;255;103;0m',  # Orange
+        'B': '\033[94m',  # Blue
+        'T': '\033[96m',  # Turquoise
+        'r': '\033[91m',  # Pinkish-red
+        None: '\033[0m'   # Reset
+    }
+    code = color_codes.get(color, '\033[0m')
+    print(code + (text % args if args else text) + '\033[0m', end='')
+
+def get_ordinal(n):
+    m = n % 10
+    tens = (n // 10) % 10
+    if tens == 1:
+        return 'th'
+    if m == 1:
+        return 'st'
+    if m == 2:
+        return 'nd'
+    if m == 3:
+        return 'rd'
+    return 'th'
+
+# ========================================== MAIN FUNCTION ========================================== #
+def main():
+    inputError = False
+    while True:
+        colorprint("<Mohsen Amr - 9655>\n", 'T')
+        colorprint("Digital Logic Circuits 1", 'B')
+        colorprint("\t\t[Quine McClusky PI & EPI Finder]\n\n", 'B')
+
+        if inputError:
+            colorprint("Input must be an integer between 1 and 26\n", 'R')
+        colorprint("Enter the number of variables (1-26): ", 'Y')
+
+        numOfVars = input().strip()
+
+        if not numOfVars.isdigit():
+            inputError = True
+            continue
+
+        numOfVars = int(numOfVars)
+        if 1 <= numOfVars <= 26:
+            break
+        else:
+            inputError = True
+            continue
+
+    varNames = vars_generator(numOfVars)
+    colorprint(f"\nF({', '.join(varNames)})\n\n", 'O')
+
+    colorprint("Function input forms:\n", 'O')
+    print("1] F = \u03A3m(...) (summation of minterms)\n2] F = \u03A0m(...) (product of maxterms)\n3] F = ... + ... (sum of product form)\n")
+
+    inputError = False
+    while True:
+        if inputError:
+            colorprint("Invalid choice. Please enter 1, 2, or 3.\n", 'R')
+        colorprint("Choose input form (1,2 or 3): ", 'Y')
+        choice = input().strip()
+        if choice in ['1', '2', '3']:
+            break
+        else:
+            inputError = True
+
+    colorprint("\n\n\n\n<Mohsen Amr - 9655>\n", 'T')
+    colorprint("Digital Logic Circuits 1", 'B')
+    colorprint("\t\t[Quine McClusky PI & EPI Finder]\n\n", 'B')
+
+    minterms = []
+    if choice == '1':
+        colorprint(f"F({', '.join(varNames)}) = Σm(...) (summation of minterms)\n", 'G')
+        max_minterm = 2 ** numOfVars - 1
+        colorprint(f"Minterms in range (0-{max_minterm}). Enter -1 to stop.\n", 'O')
+        inputError = False
+        while True:
+            if inputError:
+                colorprint(f"Invalid input. Please enter an integer between 0 and {max_minterm}, or -1 to stop.\n", 'R')
+            colorprint(f"Enter {len(minterms)+1}{get_ordinal(len(minterms)+1)} minterm: ", 'Y')
+            user_input = input().strip()
+            if user_input == '-1':
+                break
+            if not user_input.isdigit():
+                inputError = True
+                continue
+            m_value = int(user_input)
+            if 0 <= m_value <= max_minterm:
+                if m_value not in minterms:
+                    minterms.append(m_value)
+                    inputError = False
+                else:
+                    colorprint("Minterm already entered.\n", 'R')
+            else:
+                inputError = True
+        
+        minterms = sorted(minterms)
+    
+    elif choice == '2':
+        colorprint(f"F({', '.join(varNames)}) = Πm(...) (product of maxterms)\n", 'G')
+        maxterms = []
+        max_maxterm = 2 ** numOfVars - 1
+        colorprint(f"Maxterms in range (0-{max_maxterm}). Enter -1 to stop.\n", 'O')
+        inputError = False
+        while True:
+            if inputError:
+                colorprint(f"Invalid input. Please enter an integer between 0 and {max_maxterm}, or -1 to stop.\n", 'R')
+            colorprint(f"Enter {len(maxterms)+1}{get_ordinal(len(maxterms)+1)} maxterm: ", 'Y')
+            user_input = input().strip()
+            if user_input == '-1':
+                break
+            if not user_input.isdigit():
+                inputError = True
+                continue
+            maxterm = int(user_input)
+            if 0 <= maxterm <= max_maxterm:
+                if maxterm not in maxterms:
+                    maxterms.append(maxterm)
+                    inputError = False
+                else:
+                    colorprint("Maxterm already entered.\n", 'R')
+            else:
+                inputError = True
+
+        maxterms = sorted(maxterms)
+        minterms = maxterms_to_minterms(maxterms, numOfVars)
+        
+    elif choice == '3':
+        colorprint(f"F({', '.join(varNames)}) = ... + ... (sum of product form)\n", 'G')
+        sop_terms = []
+        colorprint(f"Enter product terms using variables {', '.join(varNames)}. For complement, use a single quote (e.g., A'). Enter an empty line to stop.\n", 'O')
+        inputError = False
+        while True:
+            if inputError:
+                colorprint(f"Invalid input. Use only variables {', '.join(varNames)} optionally followed by a single quote for complement.\n", 'R')
+            colorprint(f"Enter {len(sop_terms)+1}{get_ordinal(len(sop_terms)+1)} product term: ", 'Y')
+            user_input = input().strip()
+            if user_input == '':
+                break
+            term = user_input.replace(" ", "").upper()
+            valid = True
+            i = 0
+            while i < len(term):
+                if term[i] not in varNames:
+                    valid = False
+                    break
+                i += 1
+                if i < len(term) and term[i] == "'":
+                    i += 1
+            if valid and term:
+                duplicate = False
+                for existing in sop_terms:
+                    if existing == term:
+                        duplicate = True
+                        break
+                if duplicate:
+                    colorprint("Product term already entered.\n", 'R')
+                    inputError = False
+                else:
+                    sop_terms.append(term)
+                    inputError = False
+            else:
+                inputError = True
+        
+        minterms = sorted(SOP_to_minterms(sop_terms, varNames))
+
+    minterms = [minterm(m, numOfVars) for m in minterms]
+
+    PIs, EPIs, equation = find_PIs_and_EPIs(minterms)
+    PIs = convert_to_variables(PIs, varNames)
+    EPIs = convert_to_variables(EPIs, varNames)
+    equation = convert_to_variables(equation, varNames)
+
+    colorprint("\n\n\n\n<Mohsen Amr - 9655>\n", 'T')
+    colorprint("Digital Logic Circuits 1", 'B')
+    colorprint("\t\t[Quine McClusky PI & EPI Finder]\n\n", 'B')
+
+    if choice == '2':
+        colorprint(f"F({', '.join(varNames)}) = Πm(", 'O')
+        for i, m in enumerate(maxterms):
+            colorprint(str(m), None)
+            if i != len(maxterms) - 1:
+                colorprint(", ", 'O')
+        colorprint(")\n", 'O')
+    elif choice == '3':
+        colorprint(f"F({', '.join(varNames)}) = ", 'O')
+        for i, term in enumerate(sop_terms):
+            for v in term:
+                colorprint(v, None)
+            if i != len(sop_terms) - 1:
+                colorprint(" + ", 'O')
+        colorprint("\n", 'O')
+
+    colorprint(f"F({', '.join(varNames)}) = Σm(", 'O')
+    for i, m in enumerate(sorted([mt.id[0] for mt in minterms])):
+        colorprint(str(m), None)
+        if i != len(minterms) - 1:
+            colorprint(", ", 'O')
+    colorprint(")\n\n", 'O')
+
+    colorprint("PI(s): ", 'O')
+    for i, pi in enumerate(PIs):
+        colorprint(pi, None)
+        if i != len(PIs) - 1:
+            colorprint(", ", 'O')
+    colorprint(".\n", 'O')
+
+    colorprint("EPI(s): ", 'O')
+    for i, epi in enumerate(EPIs):
+        colorprint(epi, None)
+        if i != len(EPIs) - 1:
+            colorprint(", ", 'O')
+    colorprint(".\n", 'O')
+
+    colorprint("\nPossible Equation:", 'O')
+    colorprint(f"\nF({', '.join(varNames)}) = ", 'T')
+    for i, term in enumerate(equation):
+        colorprint(term, None)
+        if i != len(equation) - 1:
+            colorprint(" + ", 'T')
+
+    
+
+if __name__ == "__main__":
+    while True:
+        main()
+        colorprint("\n\nWould you like to find the PIs and EPIs of another function? (y/N): ", 'Y')
+        again = input().strip()
+        if again.lower() != 'y':
+            colorprint("Goodbye...\n", 'R')
+            input("Press Enter to exit...")
+            break
