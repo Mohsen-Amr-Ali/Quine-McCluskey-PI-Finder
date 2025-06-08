@@ -69,9 +69,9 @@ def combine_terms(mintermsList):
 
     return combinedTerms
 
-def find_PIs_and_EPIs(mintermList):
+def find_PIs_and_EPIs(mintermList, dontcareList):
     PIs = []
-    currentTerms = mintermList
+    currentTerms = mintermList + dontcareList
 
     while True:
         combined = combine_terms(currentTerms)
@@ -97,6 +97,8 @@ def find_PIs_and_EPIs(mintermList):
             if minterm.id[0] in pi.id:
                 minterm_to_implicants[minterm.id[0]] = minterm_to_implicants.get(minterm.id[0], [])
                 minterm_to_implicants[minterm.id[0]].append(pi)
+
+    minterm_to_implicants_copy = {k: v[:] for k, v in minterm_to_implicants.items()}
 
     EPIs = []
     for minterm_id, implicants in minterm_to_implicants.items():
@@ -264,7 +266,7 @@ def main():
     colorprint(f"\nF({', '.join(varNames)})\n\n", 'O')
 
     colorprint("Function input forms:\n", 'O')
-    print("1] F = \u03A3m(...) (summation of minterms)\n2] F = \u03A0m(...) (product of maxterms)\n3] F = ... + ... (sum of product form)\n")
+    print("1] F = \u03A3m(...) + \u03A3d(...) (summation of minterms + don't care values)\n2] F = \u03A0M(...) (product of maxterms)\n3] F = ... + ... (sum of product form)\n")
 
     inputError = False
     while True:
@@ -282,8 +284,9 @@ def main():
     colorprint("\t\t[Quine McClusky PI & EPI Finder]\n\n", 'B')
 
     minterms = []
+    dontcares = []
     if choice == '1':
-        colorprint(f"F({', '.join(varNames)}) = Σm(...) (summation of minterms)\n", 'G')
+        colorprint(f"F({', '.join(varNames)}) = Σm(...) + \u03A3d(...) (summation of minterms + don't care values)\n", 'G')
         max_minterm = 2 ** numOfVars - 1
         colorprint(f"Minterms in range (0-{max_minterm}). Enter -1 to stop.\n", 'O')
         inputError = False
@@ -306,8 +309,33 @@ def main():
                     colorprint("Minterm already entered.\n", 'R')
             else:
                 inputError = True
-        
+
+        colorprint(f"\nDon't care values in range (0-{max_minterm}). Enter -1 to stop.\n", 'O')
+        inputError = False
+        while True:
+            if inputError:
+                colorprint(f"Invalid input. Please enter an integer between 0 and {max_minterm}, or -1 to stop.\n", 'R')
+            colorprint(f"Enter {len(dontcares)+1}{get_ordinal(len(dontcares)+1)} don't care value: ", 'Y')
+            user_input = input().strip()
+            if user_input == '-1':
+                break
+            if not user_input.isdigit():
+                inputError = True
+                continue
+            d_value = int(user_input)
+            if 0 <= d_value <= max_minterm:
+                if d_value not in dontcares and d_value not in minterms:
+                    dontcares.append(d_value)
+                    inputError = False
+                elif d_value in minterms:
+                    colorprint("Value already entered as a minterm.\n", 'R')
+                else:
+                    colorprint("Don't care value already entered.\n", 'R')
+            else:
+                inputError = True
+
         minterms = sorted(minterms)
+        dontcares = sorted(dontcares)
     
     elif choice == '2':
         colorprint(f"F({', '.join(varNames)}) = Πm(...) (product of maxterms)\n", 'G')
@@ -378,8 +406,9 @@ def main():
         minterms = sorted(SOP_to_minterms(sop_terms, varNames))
 
     minterms = [minterm(m, numOfVars) for m in minterms]
+    dontcares = [minterm(m, numOfVars) for m in dontcares]
 
-    PIs, EPIs, equation = find_PIs_and_EPIs(minterms)
+    PIs, EPIs, equation = find_PIs_and_EPIs(minterms, dontcares)
     PIs = convert_to_variables(PIs, varNames)
     EPIs = convert_to_variables(EPIs, varNames)
     equation = convert_to_variables(equation, varNames)
@@ -409,9 +438,17 @@ def main():
         colorprint(str(m), None)
         if i != len(minterms) - 1:
             colorprint(", ", 'O')
-    colorprint(")\n\n", 'O')
+    colorprint(")", 'O')
 
-    colorprint("PI(s): ", 'O')
+    if choice == '1' and dontcares:
+        colorprint(f" + Σd(", 'O')
+        for i, m in enumerate(sorted([mt.id[0] for mt in minterms])):
+            colorprint(str(m), None)
+            if i != len(minterms) - 1:
+                colorprint(", ", 'O')
+        colorprint(")", 'O')
+
+    colorprint("\n\nPI(s): ", 'O')
     for i, pi in enumerate(PIs):
         colorprint(pi, None)
         if i != len(PIs) - 1:
@@ -425,7 +462,7 @@ def main():
             colorprint(", ", 'O')
     colorprint(".\n", 'O')
 
-    colorprint("\nPossible Equation:", 'O')
+    colorprint("\nMinimised SOP:", 'O')
     colorprint(f"\nF({', '.join(varNames)}) = ", 'T')
     for i, term in enumerate(equation):
         colorprint(term, None)
